@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ranking at 150ms — Building a Real-Time Personalization Engine on Vespa</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg: #12151b;
+    --panel: #1a1e27;
+    --panel-2: #1f2430;
+    --line: #2a3040;
+    --text: #e7e6e2;
+    --muted: #8b93a3;
+    --amber: #f0a63d;
+    --cyan: #5ec8d8;
+    --rose: #d97a86;
+  }
+
+  * { box-sizing: border-box; }
+
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    line-height: 1.65;
+    font-size: 17px;
+  }
+
+  ::selection{ background: var(--amber); color: #12151b; }
+
+  h1,h2,h3{
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .mono{ font-family: 'IBM Plex Mono', monospace; }
+
+  .wrap{
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* ---- HERO ---- */
+  .hero{
+    padding: 96px 0 64px;
+    border-bottom: 1px solid var(--line);
+  }
+  .eyebrow{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    color: var(--cyan);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 18px;
+  }
+  .hero h1{
+    font-size: 42px;
+    line-height: 1.15;
+    margin: 0 0 20px;
+    color: #f5f4f0;
+  }
+  .hero h1 span{ color: var(--amber); }
+  .hero p.lede{
+    font-size: 19px;
+    color: var(--muted);
+    max-width: 640px;
+    margin: 0 0 36px;
+  }
+  .stat-row{
+    display:flex;
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+  .stat-chip{
+    border: 1px solid var(--line);
+    background: var(--panel);
+    border-radius: 6px;
+    padding: 12px 16px;
+    min-width: 130px;
+  }
+  .stat-chip .num{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 22px;
+    color: var(--amber);
+    font-weight: 600;
+    display:block;
+  }
+  .stat-chip .label{
+    font-size: 12.5px;
+    color: var(--muted);
+    display:block;
+    margin-top: 2px;
+  }
+
+  /* ---- SECTIONS ---- */
+  section{
+    padding: 56px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  section:last-of-type{ border-bottom: none; }
+
+  .tag{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+  }
+
+  h2{
+    font-size: 26px;
+    color: #f5f4f0;
+    margin: 0 0 22px;
+  }
+
+  p{ margin: 0 0 18px; color: #d3d2ce; }
+  p.muted{ color: var(--muted); }
+
+  strong{ color: #f5f4f0; font-weight: 600;}
+
+  .role-box{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--cyan);
+    border-radius: 4px;
+    padding: 20px 24px;
+    margin: 24px 0;
+  }
+  .role-box .tag{ color: var(--cyan); margin-bottom: 8px;}
+
+  /* ---- DECISION CARDS ---- */
+  .decision{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 22px 24px;
+    margin-bottom: 16px;
+  }
+  .decision h3{
+    font-size: 16.5px;
+    margin: 0 0 8px;
+    color: var(--amber);
+  }
+  .decision p{ margin-bottom: 0; font-size: 15.5px; color: #c9c8c3;}
+  .decision .verdict{
+    display:inline-block;
+    margin-top: 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+    color: var(--cyan);
+    background: rgba(94,200,216,0.08);
+    border: 1px solid rgba(94,200,216,0.25);
+    padding: 4px 10px;
+    border-radius: 4px;
+  }
+
+  /* ---- DIAGRAM ---- */
+  .diagram-frame{
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 28px 0;
+    overflow-x: auto;
+  }
+  .diagram-caption{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 10px;
+  }
+
+  /* ---- OPTIMIZATION LIST ---- */
+  .opt-list{
+    list-style: none;
+    margin: 24px 0;
+    padding: 0;
+    counter-reset: opt;
+  }
+  .opt-list li{
+    counter-increment: opt;
+    position: relative;
+    padding: 14px 0 14px 44px;
+    border-top: 1px solid var(--line);
+  }
+  .opt-list li:first-child{ border-top: none; }
+  .opt-list li::before{
+    content: counter(opt);
+    position: absolute;
+    left: 0;
+    top: 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    color: var(--bg);
+    background: var(--amber);
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    display:flex; align-items:center; justify-content:center;
+    font-weight: 600;
+  }
+  .opt-list strong{ color: var(--amber); }
+
+  /* ---- GAP TABLE ---- */
+  .gap{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin-bottom: 14px;
+  }
+  .gap .gtitle{
+    font-weight: 600;
+    color: var(--rose);
+    font-size: 15.5px;
+    margin-bottom: 6px;
+  }
+  .gap p{ font-size: 14.5px; color: #c9c8c3; margin-bottom: 0;}
+  .gap .next{
+    color: var(--cyan);
+    font-size: 13.5px;
+    margin-top: 8px;
+    display:block;
+  }
+
+  blockquote{
+    margin: 28px 0;
+    padding: 4px 0 4px 20px;
+    border-left: 3px solid var(--amber);
+    color: #f0efe9;
+    font-size: 18px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 500;
+  }
+
+  footer{
+    padding: 48px 0 80px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  footer .name{ color: var(--text); font-weight: 600; }
+
+  @media (max-width: 600px){
+    .hero{ padding: 64px 0 40px; }
+    .hero h1{ font-size: 30px; }
+    section{ padding: 40px 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="hero">
+    <div class="eyebrow">Systems case study — recommendation infrastructure</div>
+    <h1>Ranking a catalog in <span>16 numbers</span>, in under <span>150 milliseconds</span></h1>
+    <p class="lede">How a vector-search recommendation engine added real, per-user ranking on top of an eligibility-only rules engine — and stayed up 99.99% of the time while doing it, at a scale of tens of millions of requests a day.</p>
+    <div class="stat-row">
+      <div class="stat-chip"><span class="num">150ms</span><span class="label">p99 latency</span></div>
+      <div class="stat-chip"><span class="num">99.99%</span><span class="label">availability</span></div>
+      <div class="stat-chip"><span class="num">~61M</span><span class="label">requests / day</span></div>
+      <div class="stat-chip"><span class="num">6.5M+</span><span class="label">users reached / month</span></div>
+    </div>
+  </div>
+
+  <section>
+    <div class="tag">01 — The problem</div>
+    <h2>Same offer, every user, every time</h2>
+    <p>Before this system existed, the recommendation surfaces inside the product — the banners and cards nudging a user toward a relevant feature or upgrade — were driven by a rules engine. Rules are fine for "don't show this to ineligible users." They're bad at "which of these forty eligible offers is actually relevant to <em>this</em> person, right now." A rules engine can exclude; it can't rank.</p>
+    <p>Rules are good at eligibility — which segment can see which offer, which combinations are excluded, which compliance constraints apply. What they can't do is rank. A rules engine can narrow forty eligible offers down to the five a user qualifies for, but it has no way to know which of those five is actually the most relevant to that specific person, based on what they've actually been doing in the product.</p>
+    <p>The goal was never to throw out the rules engine — eligibility and compliance logic still need to be deterministic, and you don't want a ranking model quietly learning to violate a hard exclusion rule. The goal was to put a real ranking layer on top of it: something that scores relevance per user, using their behavior, instead of stopping at eligible-or-not. Understanding Vespa's scoring model well enough to design the schema and rank profiles around it, embedding the content-side vectors, and building the pipeline that keeps those vectors correct as content changes — that freshness problem ended up being the part that ate the most time.</p>
+  </section>
+
+  <section>
+    <div class="tag">02 — Why Vespa, specifically</div>
+    <h2>The filtering requirement ruled out a plain vector database</h2>
+    <p>The natural first instinct for "rank things by relevance" is a managed vector database — Pinecone, Weaviate, something you can stand up in an afternoon. We evaluated that path and moved off it fairly quickly, for a reason that's easy to miss until you hit it in production: <strong>ranking and filtering aren't separate steps here, they have to happen in the same request, on the same infrastructure.</strong> A recommendation has to be filtered by which product surface it's eligible for, which items the user has already seen, and business rules that can't leak into the score — before it ever gets ranked.</p>
+
+    <div class="decision">
+      <h3>vs. a managed vector DB (Pinecone-style)</h3>
+      <p>Great at pure nearest-neighbor search, but metadata filtering is bolted on and there's no way to express a custom ranking expression that blends a dot-product with business logic. We'd have needed to build an orchestration layer on top just to combine "filter by eligible surface" with "rank by affinity" — which defeats the point of using a managed service.</p>
+      <span class="verdict">Ruled out: filtering + custom ranking can't both be first-class</span>
+    </div>
+
+    <div class="decision">
+      <h3>vs. Elasticsearch's kNN</h3>
+      <p>ES added vector search, but it's a retrofit on a text-search engine. There's no native tensor type — you're working around the index rather than with it. Vespa, by contrast, lets you define an embedding as a first-class tensor field in the schema and write the ranking expression as actual math, evaluated where the data lives.</p>
+      <span class="verdict">Ruled out: vectors are a bolt-on, not a native concept</span>
+    </div>
+
+    <div class="decision">
+      <h3>vs. Weaviate</h3>
+      <p>Weaviate does hybrid search well, but the "searcher chain" pattern — load the user's vector, apply a structured filter, then rank, all inside one request on one node — isn't a first-class concept the way it is in Vespa. You'd be shipping that orchestration back and forth over the network, which is exactly the latency tax we couldn't afford.</p>
+      <span class="verdict">Ruled out: no native concept of chained, in-process search stages</span>
+    </div>
+
+    <p>What made Vespa the right call wasn't any single feature — it was that filtering, ranking, and serving all happen in the same process, on the same node, with no network hop in between. At the request volume we were running, that architectural difference is the difference between a 150ms system and a 500ms one.</p>
+  </section>
+
+  <section>
+    <div class="tag">03 — Architecture</div>
+    <h2>Two separate concerns: keeping content fresh, and serving a ranked list fast</h2>
+    <p>The system splits cleanly into two paths that almost never touch each other: an <span style="color:var(--cyan)">ingestion path</span> that keeps the content vectors up to date, and a <span style="color:var(--amber)">serving path</span> that answers a recommendation request. Keeping these physically separate — down to running on different nodes — was deliberate: a slow or bursty content update should never be able to degrade a live user-facing request.</p>
+
+    <div class="diagram-frame">
+      <svg viewBox="0 0 780 420" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Mono, monospace">
+        <defs>
+          <marker id="arrow-cyan" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 Z" fill="#5ec8d8"/>
+          </marker>
+          <marker id="arrow-amber" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 Z" fill="#f0a63d"/>
+          </marker>
+        </defs>
+
+        <!-- Section labels -->
+        <text x="16" y="24" fill="#5ec8d8" font-size="12" letter-spacing="1">INGESTION — KEEPING VECTORS FRESH</text>
+        <text x="16" y="248" fill="#f0a63d" font-size="12" letter-spacing="1">SERVING — ANSWERING A REQUEST</text>
+
+        <!-- INGESTION ROW -->
+        <g font-size="12.5">
+          <rect x="16" y="40" width="120" height="52" rx="6" fill="#1a1e27" stroke="#2a3040"/>
+          <text x="76" y="62" fill="#e7e6e2" text-anchor="middle">Content</text>
+          <text x="76" y="78" fill="#8b93a3" text-anchor="middle" font-size="11">team events</text>
+
+          <line x1="136" y1="66" x2="182" y2="66" stroke="#5ec8d8" stroke-width="1.5" marker-end="url(#arrow-cyan)"/>
+
+          <rect x="184" y="40" width="100" height="52" rx="6" fill="#1a1e27" stroke="#2a3040"/>
+          <text x="234" y="62" fill="#e7e6e2" text-anchor="middle">SQS</text>
+          <text x="234" y="78" fill="#8b93a3" text-anchor="middle" font-size="11">buffer</text>
+
+          <line x1="284" y1="66" x2="330" y2="66" stroke="#5ec8d8" stroke-width="1.5" marker-end="url(#arrow-cyan)"/>
+
+          <rect x="332" y="40" width="110" height="52" rx="6" fill="#1a1e27" stroke="#2a3040"/>
+          <text x="387" y="58" fill="#e7e6e2" text-anchor="middle">Lambda</text>
+          <text x="387" y="74" fill="#8b93a3" text-anchor="middle" font-size="11">fan-out</text>
+          <text x="387" y="86" fill="#8b93a3" text-anchor="middle" font-size="11">bridge</text>
+
+          <line x1="442" y1="66" x2="488" y2="66" stroke="#5ec8d8" stroke-width="1.5" marker-end="url(#arrow-cyan)"/>
+
+          <rect x="490" y="40" width="100" height="52" rx="6" fill="#1a1e27" stroke="#2a3040"/>
+          <text x="540" y="62" fill="#e7e6e2" text-anchor="middle">Kafka</text>
+          <text x="540" y="78" fill="#8b93a3" text-anchor="middle" font-size="11">topic</text>
+
+          <line x1="590" y1="66" x2="636" y2="66" stroke="#5ec8d8" stroke-width="1.5" marker-end="url(#arrow-cyan)"/>
+
+          <rect x="638" y="40" width="126" height="52" rx="6" fill="#20303a" stroke="#5ec8d8"/>
+          <text x="701" y="58" fill="#e7e6e2" text-anchor="middle">Vespa</text>
+          <text x="701" y="74" fill="#5ec8d8" text-anchor="middle" font-size="11">feed API</text>
+          <text x="701" y="86" fill="#8b93a3" text-anchor="middle" font-size="10">(partial update)</text>
+        </g>
+
+        <!-- divider -->
+        <line x1="16" y1="120" x2="764" y2="120" stroke="#2a3040" stroke-dasharray="3,3"/>
+
+        <!-- feedback loop arrow from serving up to ingestion labeling -->
+        <path d="M 701 250 C 701 150 701 150 701 96" fill="none" stroke="#8b93a3" stroke-width="1.2" stroke-dasharray="2,3" marker-end="url(#arrow-cyan)"/>
+        <text x="708" y="180" fill="#8b93a3" font-size="10.5">vectors</text>
+        <text x="708" y="192" fill="#8b93a3" font-size="10.5">stay live</text>
+
+        <!-- SERVING ROW -->
+        <g font-size="12.5">
+          <rect x="16" y="252" width="110" height="52" rx="6" fill="#1a1e27" stroke="#2a3040"/>
+          <text x="71" y="274" fill="#e7e6e2" text-anchor="middle">User</text>
+          <text x="71" y="290" fill="#8b93a3" text-anchor="middle" font-size="11">request</text>
+
+          <line x1="126" y1="278" x2="172" y2="278" stroke="#f0a63d" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+
+          <rect x="174" y="252" width="140" height="52" rx="6" fill="#1a1e27" stroke="#2a3040"/>
+          <text x="244" y="270" fill="#e7e6e2" text-anchor="middle" font-size="11.5">UserProfile</text>
+          <text x="244" y="286" fill="#8b93a3" text-anchor="middle" font-size="11">Searcher</text>
+
+          <line x1="314" y1="278" x2="360" y2="278" stroke="#f0a63d" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+
+          <rect x="362" y="252" width="130" height="52" rx="6" fill="#1a1e27" stroke="#2a3040"/>
+          <text x="427" y="270" fill="#e7e6e2" text-anchor="middle" font-size="11.5">SetFilter</text>
+          <text x="427" y="286" fill="#8b93a3" text-anchor="middle" font-size="11">Searcher</text>
+
+          <line x1="492" y1="278" x2="538" y2="278" stroke="#f0a63d" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+
+          <rect x="540" y="252" width="112" height="52" rx="6" fill="#332417" stroke="#f0a63d"/>
+          <text x="596" y="270" fill="#e7e6e2" text-anchor="middle" font-size="11.5">Native</text>
+          <text x="596" y="286" fill="#f0a63d" text-anchor="middle" font-size="11">rank (C++)</text>
+
+          <line x1="652" y1="278" x2="698" y2="278" stroke="#f0a63d" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+
+          <rect x="700" y="252" width="64" height="52" rx="6" fill="#1a1e27" stroke="#2a3040"/>
+          <text x="732" y="274" fill="#e7e6e2" text-anchor="middle" font-size="11">Ranked</text>
+          <text x="732" y="290" fill="#8b93a3" text-anchor="middle" font-size="10">list</text>
+        </g>
+
+        <!-- freshness inputs -->
+        <rect x="174" y="330" width="140" height="46" rx="6" fill="#1a1e27" stroke="#2a3040"/>
+        <text x="244" y="350" fill="#8b93a3" text-anchor="middle" font-size="11">User embedding</text>
+        <text x="244" y="365" fill="#8b93a3" text-anchor="middle" font-size="10.5">(fetched live)</text>
+        <line x1="244" y1="330" x2="244" y2="304" stroke="#8b93a3" stroke-width="1.2" marker-end="url(#arrow-amber)"/>
+
+        <rect x="540" y="330" width="112" height="46" rx="6" fill="#1a1e27" stroke="#2a3040"/>
+        <text x="596" y="350" fill="#8b93a3" text-anchor="middle" font-size="11">DynamoDB</text>
+        <text x="596" y="365" fill="#8b93a3" text-anchor="middle" font-size="10.5">feedback</text>
+        <line x1="596" y1="330" x2="596" y2="304" stroke="#8b93a3" stroke-width="1.2" marker-end="url(#arrow-amber)"/>
+
+        <rect x="16" y="330" width="120" height="46" rx="6" fill="#1a1e27" stroke="#2a3040"/>
+        <text x="76" y="350" fill="#8b93a3" text-anchor="middle" font-size="11">Two-container</text>
+        <text x="76" y="365" fill="#8b93a3" text-anchor="middle" font-size="10.5">isolation (8080/8081)</text>
+      </svg>
+      <div class="diagram-caption">ingestion never shares resources with serving — a content backlog can't touch p99</div>
+    </div>
+
+    <p>On the ingestion side, content changes don't get pushed straight into Vespa. They land in SQS first, which exists purely so the systems publishing content changes don't need to know or care about our processing capacity — SQS absorbs bursts and gives us dead-letter handling for free. From there, a Lambda function bridges SQS to several downstream Kafka topics, fanning the same event stream out to the different services — ours included — that need it. Kafka is what actually gives us the property that matters most operationally: <strong>replay</strong>. If we ship a bad embedding model or find a bug in how tags are weighted, we can rewind the topic to an earlier offset and rebuild the index without touching the upstream systems at all.</p>
+    <p>From there, updates land in Vespa as <strong>partial updates</strong>, not full document replacements. That distinction matters more than it sounds — a partial update touches only the changed field in Vespa's in-memory attribute store, so there's no reindex lag and no window where a query could see a half-written document.</p>
+    <p>The serving side is a short, deliberately thin chain: one searcher attaches the user's embedding to the query, another applies the eligibility and "already-seen" filters, and then Vespa's own ranking runs natively on the content node — no Java, no network hop, just the dot-product math running where the data already lives. That's the part that makes 150ms achievable at this volume: the expensive computation never leaves the machine it's running on.</p>
+  </section>
+
+  <section>
+    <div class="tag">04 — Design decisions</div>
+    <h2>Dot-product over cosine, and why 16 dimensions is a feature, not a limitation</h2>
+    <p>Two choices get questioned in almost every technical conversation about this system, so they're worth explaining properly rather than glossing over.</p>
+
+    <div class="decision">
+      <h3>Dot-product ranking, not cosine similarity</h3>
+      <p>Cosine similarity normalizes away magnitude — it only cares about direction. That's the wrong model here. A niche item with a weak-but-aligned signal shouldn't rank the same as a broadly strong one; magnitude is meaningful because it encodes confidence, not just direction. The ranking expression is a straightforward <span class="mono" style="color:var(--cyan);">sum(query(user_vector) × attribute(item_vector))</span> — evaluated per document, in-memory, with no normalization step in the way.</p>
+    </div>
+
+    <div class="decision">
+      <h3>16-dimensional embeddings</h3>
+      <p>This looks small next to a 128 or 512-dimension text embedding, until you remember this isn't open-domain semantic search — it's matching users against a bounded catalog with well-understood latent factors (category, behavioral affinity, product context). Those larger dimensions exist to capture an effectively unbounded concept space; ours isn't unbounded. The practical payoff is real: a 16-float vector is 64 bytes, small enough that the entire working set of embeddings sits comfortably in a content node's cache. At the request volumes involved, staying in cache rather than falling back to memory bandwidth is often the actual difference between a fast system and a slow one.</p>
+    </div>
+
+    <blockquote>The filtering and custom-ranking requirements ruled out the simpler paths from day one. This wasn't over-engineering — it was the minimum architecture the requirement actually needed.</blockquote>
+  </section>
+
+  <section>
+    <div class="tag">05 — Latency engineering</div>
+    <h2>Six things had to be true simultaneously to hit p99</h2>
+    <p>No single optimization gets you to 150ms at this scale — it's the compounding effect of removing every avoidable millisecond from the request path.</p>
+    <ul class="opt-list">
+      <li><strong>Thin searcher chain.</strong> Each Java-layer searcher does the minimum possible work — attach a vector, build a filter — and hands off immediately. The expensive part runs natively on the content node, not in the request-handling layer.</li>
+      <li><strong>Filter before rank, not during.</strong> Items excluded by eligibility or "already seen" logic are dropped before they ever enter the ranking pipeline, not scored and then discarded. Skipping the ranking pipeline entirely for filtered-out terms avoids a meaningful chunk of wasted computation at this volume.</li>
+      <li><strong>In-memory attribute fields.</strong> The fields that matter for ranking — ids, tags, the embedding tensor itself — are held in memory, not on disk. The entire scoring computation happens with zero disk I/O in the hot path.</li>
+      <li><strong>Compact tensors.</strong> A 64-byte embedding isn't just "small" in the abstract — it's small enough to survive in L2/L3 cache across the whole working set, which is the difference between a cache hit and a cache miss on every single ranking call.</li>
+      <li><strong>Physical isolation of feed and serve.</strong> Document ingestion runs on a separate container, on a separate node, from the one answering user requests. A slow or bursty content update literally cannot compete for CPU or memory with a live request.</li>
+      <li><strong>Per-segment monitoring, not just an aggregate number.</strong> Watching p99 as one blended number hides regressions — a degrading path on one product surface or device type gets averaged away by a healthy one elsewhere. Breaking latency down by segment is what actually lets you catch a regression before a customer does.</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="tag">06 — Reliability</div>
+    <h2>99.99% isn't one mechanism, it's five, each covering a different failure</h2>
+    <p>Every "nine" in an availability target has to be backed by an actual mechanism, or it's just a number on a slide. Here's what actually covers each failure mode:</p>
+    <div class="gap">
+      <div class="gtitle">Region failure</div>
+      <p>Multi-region active-active deployment with automatic failover — if one region degrades, traffic shifts without a human in the loop.</p>
+    </div>
+    <div class="gap">
+      <div class="gtitle">Bad deployment</div>
+      <p>A canary instance takes every change first, with a bake window before it reaches the second region — so a bad rollout is contained to a fraction of traffic, not all of it.</p>
+    </div>
+    <div class="gap">
+      <div class="gtitle">Node failure</div>
+      <p>Content redundancy means every document lives on more than one node — a single node going down doesn't lose data or drop queries.</p>
+    </div>
+    <div class="gap">
+      <div class="gtitle">Cascading failure</div>
+      <p>Feed and serve run on physically separate containers, so a problem in document ingestion can't cascade into a serving outage.</p>
+    </div>
+    <div class="gap">
+      <div class="gtitle">Dependency failure</div>
+      <p>If the external user-profile store is unreachable, the system falls back to a default profile rather than failing the request outright — degraded personalization beats no response.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="tag">07 — What I'd own confidently in an interview</div>
+    <h2>The gaps, and what comes next</h2>
+    <p>Every system has known tradeoffs, and being specific about them tends to land better than pretending the system is finished.</p>
+
+    <div class="gap">
+      <div class="gtitle">User embeddings are fetched synchronously at query time</div>
+      <p>This is the simplest correctness model — the vector is always current, no staleness risk. The cost is a live dependency on an external store sitting directly in the request path.</p>
+      <span class="next">→ Next: pre-fetch and cache at session start with a short TTL, to take that store out of the critical path without sacrificing freshness.</span>
+    </div>
+    <div class="gap">
+      <div class="gtitle">No real-time collaborative filtering</div>
+      <p>Item embeddings are pre-computed offline; "users like you also liked" signal is baked in rather than computed live.</p>
+      <span class="next">→ Next: stream-compute collaborative signal from the same event pipeline that already exists for content updates.</span>
+    </div>
+    <div class="gap">
+      <div class="gtitle">Model-quality degradation is inferred, not measured directly</div>
+      <p>We watch engagement metrics and ranking-score drift as proxies for "is the model still good," but a proxy is still a proxy.</p>
+      <span class="next">→ Next: shadow-score a candidate model against production traffic and compare distributions before it's ever fully rolled out.</span>
+    </div>
+  </section>
+
+  <footer>
+    Written by <span class="name">Tanishka Singh</span> — ML personalization &amp; recommendation systems, built on Vespa.
+  </footer>
+
+</div>
+</body>
+</html>
