@@ -1,2 +1,2 @@
 # vespa-personalization-engine
-It is the write up on serving recommendation engine with 150ms p99 latency and 99.99% availability for approximately 61M request/day.
+A write up on real-time ad recommendation engine using vector embeddings and high-concurrency search to eliminate repeated/irrelevant ads, serving recommendations within a platform handling 6.5M users/month at ~150ms p99 and 99.99% availability
